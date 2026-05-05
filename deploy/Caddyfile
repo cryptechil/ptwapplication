@@ -1,17 +1,22 @@
 ptw.crtgeeb.co.il {
     encode zstd gzip
 
-    # Web SPA — built static files
-    handle /share/* {
-        root * /var/www/ptw/web
-        try_files {path} /index.html
-        file_server
+    # noVNC for the worker browser (CAPTCHA solving). Protected with basic auth.
+    # Generate the password hash with: caddy hash-password
+    # Then put the result on the line below in place of REPLACE_WITH_HASH.
+    handle_path /vnc/* {
+        basic_auth {
+            ptwadmin REPLACE_WITH_HASH
+        }
+        reverse_proxy 127.0.0.1:7900
     }
 
+    # API
     handle_path /api/* {
-        reverse_proxy localhost:4000
+        reverse_proxy 127.0.0.1:4000
     }
 
+    # SPA — same static bundle for all other paths, including /share/<token>.
     handle {
         root * /var/www/ptw/web
         try_files {path} /index.html

@@ -1,5 +1,5 @@
 import { Worker } from 'bullmq';
-import { redis } from '../queue.js';
+import { redis, schemaSnapshotQueue } from '../queue.js';
 import { runSubmit } from './submitter.js';
 import { runSnapshot } from './snapshot.js';
 
@@ -25,4 +25,16 @@ snapshotWorker.on('failed', (job, err) => {
   console.error(`[snapshot] job ${job?.id} failed:`, err);
 });
 
-console.log('PTW workers started (ptw-submit, schema-snapshot)');
+// Daily schema snapshot at 04:30 server time.
+await schemaSnapshotQueue.add(
+  'daily-snapshot',
+  {},
+  {
+    repeat: { pattern: '30 4 * * *' },
+    removeOnComplete: 50,
+    removeOnFail: 50,
+    jobId: 'daily-snapshot',
+  },
+);
+
+console.log('PTW workers started (ptw-submit, schema-snapshot); daily snapshot scheduled');

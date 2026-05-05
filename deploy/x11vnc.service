@@ -1,0 +1,16 @@
+[Unit]
+Description=x11vnc on display :99 (PTW worker browser)
+After=xvfb.service
+Requires=xvfb.service
+
+[Service]
+Type=simple
+User=ptw
+# -localhost: only listen on 127.0.0.1, Caddy bridges from outside
+# -nopw: no VNC password — auth is enforced by Caddy basic_auth on /vnc/
+ExecStart=/usr/bin/x11vnc -display :99 -rfbport 5900 -localhost -nopw -forever -shared -quiet
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

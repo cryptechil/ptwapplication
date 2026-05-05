@@ -1,0 +1,14 @@
+[Unit]
+Description=noVNC websockify bridge for PTW worker
+After=x11vnc.service
+Requires=x11vnc.service
+
+[Service]
+Type=simple
+User=ptw
+ExecStart=/usr/bin/websockify --web=/usr/share/novnc 127.0.0.1:7900 127.0.0.1:5900
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
