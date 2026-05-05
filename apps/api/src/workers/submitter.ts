@@ -62,14 +62,27 @@ export async function runSubmit(requestId: string) {
 
     await fillForm(page, payload);
 
-    // Hand-off to admin for CAPTCHA solving + final submit.
-    await prisma.ptwRequest.update({
-      where: { id: requestId },
-      data: { status: 'awaiting_captcha' },
-    });
+    // 1. Try clicking the reCAPTCHA "I'm not a robot" checkbox ourselves.
+    //    Google often grants a token without a challenge if the session
+    //    looks reasonable. If it does, we can submit fully automatically.
+    const autoSolved = await tryAutoCaptcha(page).catch(() => false);
 
-    // Wait for the success page. Monday redirects to a /submission?... URL with
-    // a thank-you screen that contains the new PTW number + title + link.
+    if (autoSolved) {
+      await prisma.ptwRequest.update({
+        where: { id: requestId },
+        data: { status: 'submitting' },
+      });
+      await page.locator('[data-testid="submit-form-button"]').click();
+    } else {
+      // Challenge popup appeared — hand off to the admin.
+      await prisma.ptwRequest.update({
+        where: { id: requestId },
+        data: { status: 'awaiting_captcha' },
+      });
+    }
+
+    // Either way we now wait for the thank-you page that gives us the PTW
+    // number. If a human is solving, they get up to 10 minutes.
     const success = await waitForSuccess(page).catch(() => null);
 
     if (!success) {
@@ -242,6 +255,45 @@ async function waitForSuccess(page: Page): Promise<SuccessPayload> {
 
 function cssEscape(id: string) {
   return id.replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
+}
+
+/**
+ * Tries to solve Google reCAPTCHA v2 by clicking the "I'm not a robot"
+ * checkbox and waiting for Google to issue a token without a challenge.
+ *
+ * Returns true if a token was obtained (we're free to submit), false if a
+ * challenge popup opened (human required) or the click could not be made.
+ */
+async function tryAutoCaptcha(page: import('playwright').Page): Promise<boolean> {
+  const anchor = page.frameLocator('iframe[title="reCAPTCHA"]').first();
+  await anchor.locator('#recaptcha-anchor').click({ timeout: 10_000 });
+
+  // Poll the hidden textarea Google fills with the response token. If it
+  // gets a value within ~8 seconds, no challenge is needed.
+  const probeScript = `(() => {
+    const el = document.querySelector('#g-recaptcha-response');
+    const token = el && 'value' in el ? el.value : '';
+    const frames = Array.from(document.querySelectorAll('iframe'));
+    const challenge = frames.find(f =>
+      (f.getAttribute('title') || '').toLowerCase().includes('challenge'),
+    );
+    let challengeOpen = false;
+    if (challenge) {
+      const r = challenge.getBoundingClientRect();
+      challengeOpen = r.width > 50 && r.height > 50;
+    }
+    return { token, challengeOpen };
+  })()`;
+
+  for (let i = 0; i < 16; i++) {
+    const result = (await page.evaluate(probeScript).catch(() => null)) as
+      | { token: string; challengeOpen: boolean }
+      | null;
+    if (result?.token) return true;
+    if (result?.challengeOpen) return false;
+    await page.waitForTimeout(500);
+  }
+  return false;
 }
 
 /**
