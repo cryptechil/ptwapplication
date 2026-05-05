@@ -1,8 +1,12 @@
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = { ...(init.headers as Record<string, string> ?? {}) };
+  if (init.body !== undefined && init.body !== null && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   const res = await fetch(`/api${path}`, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
     ...init,
+    headers,
   });
   if (!res.ok) {
     let body: unknown = null;
@@ -21,7 +25,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const api = {
   get: <T>(p: string) => request<T>(p),
   post: <T>(p: string, body?: unknown) =>
-    request<T>(p, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+    request<T>(p, { method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined }),
   patch: <T>(p: string, body: unknown) =>
     request<T>(p, { method: 'PATCH', body: JSON.stringify(body) }),
   del: <T>(p: string) => request<T>(p, { method: 'DELETE' }),
