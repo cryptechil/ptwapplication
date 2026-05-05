@@ -92,8 +92,8 @@ fi
 mkdir -p /var/www/ptw/data/uploads /var/www/ptw/data/snapshots
 chown -R ptw:ptw /var/www/ptw/data
 
-echo "==> 7/8 prisma migrate"
-sudo -u ptw bash -lc "cd $APP_DIR && npx prisma migrate deploy --schema apps/api/prisma/schema.prisma"
+echo "==> 7/8 prisma db push (sync schema; no migration history yet)"
+sudo -u ptw bash -lc "cd $APP_DIR && npx prisma db push --schema apps/api/prisma/schema.prisma --accept-data-loss"
 
 echo "==> 8/8 systemd + caddy"
 cp "$APP_DIR"/deploy/{xvfb,x11vnc,novnc,worker}.service /etc/systemd/system/
