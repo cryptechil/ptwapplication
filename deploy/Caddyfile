@@ -1,15 +1,20 @@
 ptw.crtgeeb.co.il {
     encode zstd gzip
 
-    # noVNC for the worker browser (CAPTCHA solving). Protected with basic auth.
-    # Generate the password hash with: caddy hash-password
-    # Then put the result on the line below in place of REPLACE_WITH_HASH.
-    handle_path /vnc/* {
-        basic_auth {
-            ptwadmin REPLACE_WITH_HASH
-        }
-        reverse_proxy 127.0.0.1:7900
-    }
+    # noVNC for the worker browser (CAPTCHA solving). DISABLED by default
+    # because Caddy refuses to load with an invalid basic_auth hash.
+    #
+    # To enable:
+    #   1. caddy hash-password   # type your password, copy the bcrypt hash
+    #   2. Uncomment the block below and paste the hash where indicated.
+    #   3. systemctl reload caddy
+    #
+    # handle_path /vnc/* {
+    #     basic_auth {
+    #         ptwadmin $2a$14$REPLACE_THIS_WITH_REAL_BCRYPT_HASH
+    #     }
+    #     reverse_proxy 127.0.0.1:7900
+    # }
 
     # API
     handle_path /api/* {
