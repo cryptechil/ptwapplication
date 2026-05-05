@@ -140,6 +140,31 @@ export async function requestRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  /** Manually move a stuck request back to draft (e.g. when a captcha is
+   *  blocking and the operator wants to edit before retrying). Allowed for
+   *  the request owner or any admin, on any non-final status. The in-flight
+   *  worker, if still running, will eventually finish on its own and try to
+   *  write its terminal status — but the worker checks the current status
+   *  before each update, so a manual revert sticks. */
+  app.post('/requests/:id/revert', { preHandler: requireAuth() }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const u = req.user!;
+    const r = await prisma.ptwRequest.findUnique({ where: { id } });
+    if (!r) return reply.status(404).send({ error: 'not_found' });
+    if (u.role !== 'admin' && r.createdById !== u.id) {
+      return reply.status(403).send({ error: 'forbidden' });
+    }
+    if (r.status === 'submitted' || r.status === 'approved') {
+      return reply.status(409).send({ error: 'already_submitted' });
+    }
+    await prisma.ptwRequest.update({
+      where: { id },
+      data: { status: 'draft', failureReason: null },
+    });
+    await audit(req, 'request_reverted', 'request', id, { from: r.status });
+    return { ok: true };
+  });
+
   /** Create a guest share link. */
   app.post('/requests/:id/shares', { preHandler: requireAuth() }, async (req, reply) => {
     const { id } = req.params as { id: string };

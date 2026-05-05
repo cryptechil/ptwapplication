@@ -25,6 +25,14 @@ interface DetailResponse {
 }
 
 const EDITABLE_STATUSES = new Set(['draft', 'failed', 'schema_mismatch']);
+const ACTIVE_STATUSES = new Set(['queued', 'submitting', 'awaiting_captcha']);
+const REVERTABLE_STATUSES = new Set([
+  'queued',
+  'submitting',
+  'awaiting_captcha',
+  'failed',
+  'schema_mismatch',
+]);
 
 function formatApiError(err: unknown): string {
   if (!err) return '';
@@ -84,6 +92,11 @@ export function RequestDetail() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['request', id] }),
   });
 
+  const revert = useMutation({
+    mutationFn: () => api.post(`/requests/${id}/revert`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['request', id] }),
+  });
+
   const createShare = useMutation({
     mutationFn: () => api.post<{ share: { token: string } }>(`/requests/${id}/shares`),
     onSuccess: ({ share }) => {
@@ -117,7 +130,25 @@ export function RequestDetail() {
       )}
       {r.status === 'awaiting_captcha' && (
         <div className="banner warn">
-          הבקשה מולאה אוטומטית בטופס תבל. נדרש כעת לפתור את ה-CAPTCHA וללחוץ "שלח" ידנית בחלון הדפדפן של ה-worker.
+          ה-worker עצר על ה-CAPTCHA. פתור אותו בחלון החי שלמטה ולחץ "שלח | Submit" כדי להגיש.
+        </div>
+      )}
+      {ACTIVE_STATUSES.has(r.status) && (
+        <div style={{ margin: '16px 0' }}>
+          <strong>חלון ה-worker (Live)</strong>
+          <iframe
+            title="Worker browser live view"
+            src={`/vnc/vnc.html?autoconnect=true&resize=scale&path=vnc/websockify&reconnect=true&reconnect_delay=2000`}
+            style={{
+              display: 'block',
+              width: '100%',
+              height: 600,
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              marginTop: 8,
+              background: '#000',
+            }}
+          />
         </div>
       )}
       {r.failureReason && (
@@ -153,6 +184,17 @@ export function RequestDetail() {
             disabled={submit.isPending}
           >
             הגש לתבל
+          </button>
+        )}
+        {REVERTABLE_STATUSES.has(r.status) && (
+          <button
+            className="btn secondary"
+            onClick={() => {
+              if (confirm('להחזיר את הבקשה לטיוטה? זה יבטל את ההגשה הנוכחית.')) revert.mutate();
+            }}
+            disabled={revert.isPending}
+          >
+            החזר לטיוטה
           </button>
         )}
         {user?.role !== 'guest' && (

@@ -1,20 +1,16 @@
 ptw.crtgeeb.co.il {
     encode zstd gzip
 
-    # noVNC for the worker browser (CAPTCHA solving). DISABLED by default
-    # because Caddy refuses to load with an invalid basic_auth hash.
-    #
-    # To enable:
-    #   1. caddy hash-password   # type your password, copy the bcrypt hash
-    #   2. Uncomment the block below and paste the hash where indicated.
-    #   3. systemctl reload caddy
-    #
-    # handle_path /vnc/* {
-    #     basic_auth {
-    #         ptwadmin $2a$14$REPLACE_THIS_WITH_REAL_BCRYPT_HASH
-    #     }
-    #     reverse_proxy 127.0.0.1:7900
-    # }
+    # Live view of the worker's Chromium (noVNC). Only logged-in users get
+    # through — Caddy does a forward-auth round-trip to the API which checks
+    # the session cookie before allowing the proxy.
+    handle_path /vnc/* {
+        forward_auth 127.0.0.1:4000 {
+            uri /auth/check
+            copy_headers Cookie
+        }
+        reverse_proxy 127.0.0.1:7900
+    }
 
     # API
     handle_path /api/* {

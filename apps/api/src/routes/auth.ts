@@ -62,4 +62,13 @@ export async function authRoutes(app: FastifyInstance) {
       },
     };
   });
+
+  // Used by Caddy's forward_auth on /vnc/* — returns 200 only when the
+  // request carries a valid non-guest session cookie.
+  app.get('/auth/check', async (req, reply) => {
+    const user = await getCurrentUser(req);
+    if (!user) return reply.status(401).send({ error: 'unauthenticated' });
+    if (user.role === 'guest') return reply.status(403).send({ error: 'forbidden' });
+    return reply.send({ ok: true });
+  });
 }

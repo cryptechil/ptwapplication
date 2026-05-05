@@ -68,30 +68,35 @@ export async function runSubmit(requestId: string) {
     const autoSolved = await tryAutoCaptcha(page).catch(() => false);
 
     if (autoSolved) {
-      await prisma.ptwRequest.update({
-        where: { id: requestId },
-        data: { status: 'submitting' },
-      });
+      const ok = await setActiveStatus(requestId, 'submitting');
+      if (!ok) return; // user reverted while we were filling
       await page.locator('[data-testid="submit-form-button"]').click();
     } else {
-      // Challenge popup appeared — hand off to the admin.
-      await prisma.ptwRequest.update({
-        where: { id: requestId },
-        data: { status: 'awaiting_captcha' },
-      });
+      const ok = await setActiveStatus(requestId, 'awaiting_captcha');
+      if (!ok) return;
     }
 
     // Either way we now wait for the thank-you page that gives us the PTW
-    // number. If a human is solving, they get up to 10 minutes.
-    const success = await waitForSuccess(page).catch(() => null);
+    // number. If a human is solving, they get up to 10 minutes. We also
+    // bail if the user manually reverted the request to draft.
+    const success = await waitForSuccess(page, async () => isStillActive(requestId)).catch(() => null);
 
     if (!success) {
-      await markFailed(requestId, attempt.id, 'submission did not complete (timeout or error after captcha)');
+      // Don't overwrite a manual revert to draft.
+      const stillActive = await isStillActive(requestId);
+      if (stillActive) {
+        await markFailed(requestId, attempt.id, 'submission did not complete (timeout or error after captcha)');
+      } else {
+        await prisma.submissionAttempt.update({
+          where: { id: attempt.id },
+          data: { status: 'aborted', finishedAt: new Date() },
+        });
+      }
       return;
     }
 
-    await prisma.ptwRequest.update({
-      where: { id: requestId },
+    await prisma.ptwRequest.updateMany({
+      where: { id: requestId, status: { in: ACTIVE_STATUSES } },
       data: {
         status: 'submitted',
         submittedAt: new Date(),
@@ -117,9 +122,36 @@ export async function runSubmit(requestId: string) {
   }
 }
 
-async function markFailed(requestId: string, attemptId: string, reason: string) {
-  await prisma.ptwRequest.update({
+const ACTIVE_STATUSES: ('queued' | 'submitting' | 'awaiting_captcha')[] = [
+  'queued',
+  'submitting',
+  'awaiting_captcha',
+];
+
+async function isStillActive(requestId: string): Promise<boolean> {
+  const r = await prisma.ptwRequest.findUnique({
     where: { id: requestId },
+    select: { status: true },
+  });
+  return !!r && (ACTIVE_STATUSES as string[]).includes(r.status);
+}
+
+async function setActiveStatus(
+  requestId: string,
+  status: 'queued' | 'submitting' | 'awaiting_captcha',
+): Promise<boolean> {
+  const result = await prisma.ptwRequest.updateMany({
+    where: { id: requestId, status: { in: ACTIVE_STATUSES } },
+    data: { status },
+  });
+  return result.count > 0;
+}
+
+async function markFailed(requestId: string, attemptId: string, reason: string) {
+  // Only flip to 'failed' if the request is still in an active state — user
+  // may have reverted it back to draft in the meantime.
+  await prisma.ptwRequest.updateMany({
+    where: { id: requestId, status: { in: ACTIVE_STATUSES } },
     data: { status: 'failed', failureReason: reason.slice(0, 1000) },
   });
   await prisma.submissionAttempt.update({
@@ -228,12 +260,19 @@ interface SuccessPayload {
   html: string;
 }
 
-async function waitForSuccess(page: Page): Promise<SuccessPayload> {
+async function waitForSuccess(
+  page: Page,
+  shouldContinue?: () => Promise<boolean>,
+): Promise<SuccessPayload> {
   // Monday's thank-you screen typically lives at /submission/... and
   // contains the response text from the connected board automation.
-  // We poll for up to 10 minutes, plenty of time for human captcha solving.
+  // We poll for up to 10 minutes, plenty of time for human captcha solving,
+  // but bail early if the operator reverts the request to draft.
   const deadline = Date.now() + 10 * 60 * 1000;
   while (Date.now() < deadline) {
+    if (shouldContinue && !(await shouldContinue())) {
+      throw new Error('aborted: status no longer active');
+    }
     const html = await page.content();
     const match = html.match(/PTW\d{2}-\d{4}[^<\n]*/);
     if (match) {
