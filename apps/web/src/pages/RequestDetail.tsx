@@ -26,6 +26,28 @@ interface DetailResponse {
 
 const EDITABLE_STATUSES = new Set(['draft', 'failed', 'schema_mismatch']);
 
+function formatApiError(err: unknown): string {
+  if (!err) return '';
+  const e = err as { status?: number; body?: { error?: string; details?: { fieldErrors?: Record<string, string[]> } } };
+  if (!e.body) return e.status ? `שגיאת שרת ${e.status}` : 'שגיאת שרת';
+  const code = e.body.error;
+  const fieldErrors = e.body.details?.fieldErrors ?? {};
+  const fields = Object.entries(fieldErrors)
+    .map(([k, v]) => `${k}: ${v.join(', ')}`)
+    .join(' · ');
+  if (code === 'payload_invalid') {
+    return `הבקשה לא עברה אימות. ${fields ? 'שדות בעייתיים: ' + fields : ''}`;
+  }
+  if (code === 'schema_mismatch') {
+    return 'מבנה טופס תבל השתנה. מנהל המערכת חייב לבדוק לפני הגשה.';
+  }
+  if (code === 'not_submittable') {
+    return 'הבקשה לא במצב שניתן להגיש (כבר הוגשה / בעיבוד).';
+  }
+  if (code === 'forbidden') return 'אין הרשאה לפעולה זו.';
+  return `${code ?? 'שגיאה'} ${fields}`.trim();
+}
+
 export function RequestDetail() {
   const { id = '' } = useParams();
   const { user } = useAuth();
@@ -101,6 +123,11 @@ export function RequestDetail() {
       {r.failureReason && (
         <div className="banner error">
           סיבת כישלון: {r.failureReason}
+        </div>
+      )}
+      {(submit.error || save.error) && (
+        <div className="banner error">
+          {formatApiError(submit.error || save.error)}
         </div>
       )}
 
