@@ -1,0 +1,19 @@
+[Unit]
+Description=PTW Worker (Playwright submitter + schema snapshot)
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=ptw
+WorkingDirectory=/var/www/ptw/app/apps/api
+EnvironmentFile=/var/www/ptw/app/.env
+# Headful Chromium needs a display server. We use Xvfb + x11vnc + noVNC so the
+# admin can connect via browser and solve the CAPTCHA.
+Environment=DISPLAY=:99
+ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1280x900x24
+ExecStart=/usr/bin/node dist/workers/index.js
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

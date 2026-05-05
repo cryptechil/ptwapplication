@@ -1,0 +1,25 @@
+ptw.crtgeeb.co.il {
+    encode zstd gzip
+
+    # Web SPA — built static files
+    handle /share/* {
+        root * /var/www/ptw/web
+        try_files {path} /index.html
+        file_server
+    }
+
+    handle_path /api/* {
+        reverse_proxy localhost:4000
+    }
+
+    handle {
+        root * /var/www/ptw/web
+        try_files {path} /index.html
+        file_server
+    }
+
+    log {
+        output file /var/log/caddy/ptw.access.log
+        format json
+    }
+}

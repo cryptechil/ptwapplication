@@ -1,0 +1,23 @@
+{
+  "name": "ptwapplication",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @ptw/shared && concurrently -n api,web,worker,shared -c blue,green,magenta,gray \"npm run dev -w @ptw/api\" \"npm run dev -w @ptw/web\" \"npm run dev:worker -w @ptw/api\" \"npm run dev -w @ptw/shared\"",
+    "build": "npm run build -w @ptw/shared && npm run build -w @ptw/api && npm run build -w @ptw/web",
+    "typecheck": "npm run build -w @ptw/shared && tsc -p apps/api/tsconfig.json --noEmit && tsc -p apps/web/tsconfig.json --noEmit",
+    "db:migrate": "npm run db:migrate -w @ptw/api",
+    "db:seed": "npm run db:seed -w @ptw/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

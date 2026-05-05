@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  subcontractor
+  guest
+}
+
+enum RequestStatus {
+  draft
+  queued
+  submitting
+  awaiting_captcha
+  submitted
+  approved
+  failed
+  schema_mismatch
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  role          Role     @default(subcontractor)
+  companyName   String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  requests      PtwRequest[]
+  shares        RequestShare[] @relation("SharesCreated")
+  auditLogs     AuditLog[]
+  sessions      Session[]
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  userAgent  String?
+  ip         String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PtwRequest {
+  id                  String        @id @default(cuid())
+  internalNumber      Int           @default(autoincrement())
+  createdById         String
+  createdBy           User          @relation(fields: [createdById], references: [id])
+  status              RequestStatus @default(draft)
+  schemaVersion       String
+  payload             Json
+  attachments         Attachment[]
+  attempts            SubmissionAttempt[]
+  shares              RequestShare[]
+
+  submittedAt         DateTime?
+  approvedAt          DateTime?
+  tevelApprovalNumber String?
+  tevelApprovalTitle  String?
+  tevelApprovalLink   String?
+  failureReason       String?
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([createdById])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Attachment {
+  id          String     @id @default(cuid())
+  requestId   String
+  request     PtwRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  filename    String
+  mimetype    String
+  size        Int
+  storagePath String
+  createdAt   DateTime   @default(now())
+
+  @@index([requestId])
+}
+
+model SubmissionAttempt {
+  id          String     @id @default(cuid())
+  requestId   String
+  request     PtwRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  attemptNo   Int
+  status      String
+  error       String?
+  responseHtml String?    @db.Text
+  screenshotPath String?
+  startedAt   DateTime   @default(now())
+  finishedAt  DateTime?
+
+  @@index([requestId])
+}
+
+model FormSchemaSnapshot {
+  id            String   @id @default(cuid())
+  capturedAt    DateTime @default(now())
+  hash          String   @unique
+  fields        Json
+  approvedById  String?
+  approvedAt    DateTime?
+  notes         String?
+
+  @@index([capturedAt])
+}
+
+model RequestShare {
+  id          String   @id @default(cuid())
+  requestId   String
+  request     PtwRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  token       String   @unique
+  createdById String
+  createdBy   User     @relation("SharesCreated", fields: [createdById], references: [id])
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+
+  @@index([requestId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  payload   Json?
+  ip        String?
+  at        DateTime @default(now())
+
+  @@index([userId])
+  @@index([at])
+  @@index([entity, entityId])
+}
