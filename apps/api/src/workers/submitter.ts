@@ -169,19 +169,16 @@ async function fillField(page: Page, f: FormField, value: unknown) {
       break;
     }
     case 'dropdown': {
-      const trigger = root.locator('[role="combobox"]');
-      await trigger.click();
-      await page.locator('[role="listbox"] [role="option"]', { hasText: String(value) }).first().click();
+      await selectDropdownOption(page, root, String(value));
       break;
     }
     case 'multi_select': {
       const arr = (value as string[]) ?? [];
-      const trigger = root.locator('[role="combobox"]');
       for (const v of arr) {
-        await trigger.click();
-        await page.locator('[role="listbox"] [role="option"]', { hasText: v }).first().click();
-        await page.keyboard.press('Escape');
+        await selectDropdownOption(page, root, v, { keepOpen: true });
       }
+      // close the multi-select menu so the next field's combobox can open cleanly
+      await page.keyboard.press('Escape');
       break;
     }
     case 'checkbox_group': {
@@ -245,4 +242,39 @@ async function waitForSuccess(page: Page): Promise<SuccessPayload> {
 
 function cssEscape(id: string) {
   return id.replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
+}
+
+/**
+ * Selects an option in a Monday Downshift dropdown.
+ *
+ * The naive approach (click trigger → click option in listbox) is fragile:
+ * Monday's Downshift renders the menu as a portal, and Playwright's click
+ * actionability check can hang indefinitely on top of it. Instead we drive
+ * Downshift the same way a keyboard user would:
+ *
+ *   1. Click the combobox input to open the menu and focus it.
+ *   2. Type the desired text — Downshift filters and highlights matches.
+ *   3. Press Enter to commit the highlighted item.
+ *
+ * For multi-selects we keep the menu open between selections via keepOpen.
+ */
+async function selectDropdownOption(
+  page: import('playwright').Page,
+  root: import('playwright').Locator,
+  value: string,
+  opts: { keepOpen?: boolean } = {},
+) {
+  const input = root.locator('input[role="combobox"]').first();
+  await input.click();
+  // Clear any previous filter text and type the desired option.
+  await input.fill('');
+  await input.type(value, { delay: 20 });
+  // Give Downshift a moment to filter + highlight the first match.
+  await page.waitForTimeout(250);
+  await page.keyboard.press('Enter');
+  if (!opts.keepOpen) {
+    // Make sure the menu is closed so the next field's combobox isn't shadowed.
+    await page.keyboard.press('Escape').catch(() => {});
+  }
+  await page.waitForTimeout(150);
 }
