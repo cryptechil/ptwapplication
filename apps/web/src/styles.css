@@ -116,3 +116,72 @@ tr:hover td { background: var(--bg); }
 .banner.warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
 .banner.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 .banner.info { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+
+/* Diagonal status ribbon on a card's top-right corner */
+.ribbon-wrap { position: relative; overflow: hidden; }
+.ribbon {
+  position: absolute;
+  top: 22px;
+  right: -52px;
+  transform: rotate(45deg);
+  padding: 6px 60px;
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  z-index: 1;
+  text-align: center;
+  pointer-events: none;
+}
+.ribbon-draft     { background: #6b7280; }
+.ribbon-queued, .ribbon-submitting, .ribbon-awaiting_captcha { background: #d97706; }
+.ribbon-submitted, .ribbon-approved { background: #16a34a; }
+.ribbon-failed, .ribbon-schema_mismatch { background: #dc2626; }
+
+/* Vertical progress timeline */
+.timeline { list-style: none; padding: 0; margin: 0; }
+.timeline li {
+  position: relative;
+  padding-inline-start: 36px;
+  padding-block: 10px;
+  min-height: 48px;
+}
+.timeline li::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 12px;
+  top: 18px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid var(--border);
+  z-index: 1;
+}
+.timeline li.done::before { background: var(--success); border-color: var(--success); }
+.timeline li.current::before { background: #d97706; border-color: #d97706; box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.18); }
+.timeline li.failed::before { background: var(--danger); border-color: var(--danger); }
+.timeline li::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: 18px;
+  top: 30px;
+  bottom: -6px;
+  width: 2px;
+  background: var(--border);
+}
+.timeline li:last-child::after { display: none; }
+.timeline li.done + li::after,
+.timeline li.done::after { background: var(--success); }
+.timeline-title { font-weight: 500; }
+.timeline-meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+/* Key-value details list */
+.kv-list { display: grid; grid-template-columns: 220px 1fr; gap: 8px 16px; }
+.kv-list dt { color: var(--muted); font-weight: 400; padding-block: 4px; }
+.kv-list dd { margin: 0; padding-block: 4px; word-break: break-word; }
+@media (max-width: 600px) {
+  .kv-list { grid-template-columns: 1fr; gap: 0; }
+  .kv-list dt { padding-top: 8px; }
+}

@@ -226,6 +226,7 @@ export async function requestRoutes(app: FastifyInstance) {
         tevelApprovalNumber: r.tevelApprovalNumber,
         tevelApprovalTitle: r.tevelApprovalTitle,
         tevelApprovalLink: r.tevelApprovalLink,
+        failureReason: r.failureReason,
         payload: r.payload,
         createdBy: r.createdBy,
       },
